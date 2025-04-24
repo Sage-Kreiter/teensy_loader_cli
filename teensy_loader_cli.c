@@ -517,8 +517,43 @@ int hard_reboot(void)
 
 int soft_reboot(void)
 {
-	printf("Soft reboot is not implemented for Win32\n");
-	return 0;
+    HANDLE h = INVALID_HANDLE_VALUE;
+    char comport[20];
+    
+    for (int i = 1; i <= 30; i++) {
+        // Open the COM port
+        h = CreateFile(comport, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            DCB dcb;
+            memset(&dcb, 0, sizeof(dcb));
+            dcb.DCBlength = sizeof(dcb);
+            
+            if (GetCommState(h, &dcb)) {
+                dcb.BaudRate = CBR_9600;
+                dcb.ByteSize = 8;
+                dcb.Parity = NOPARITY;
+                dcb.StopBits = ONESTOPBIT;
+                
+                if (SetCommState(h, &dcb)) {
+                    unsigned char reboot_command[] = {0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08};
+                    DWORD bytes_written = 0;
+                    
+                    PurgeComm(h, PURGE_RXCLEAR | PURGE_TXCLEAR);
+                    
+                    if (WriteFile(h, reboot_command, sizeof(reboot_command), &bytes_written, NULL) && 
+                        bytes_written == sizeof(reboot_command)) {
+                        CloseHandle(h);
+                        return 1;
+                    }
+                }
+            }
+            
+            CloseHandle(h);
+        }
+    }
+    
+    printf("Unable to soft reboot. No Teensy detected.");
+    return 0;
 }
 
 #endif
